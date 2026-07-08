@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}ebooks — {{ job.book_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center gap-3">
+        <a href="/" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back</a>
+        <h1 class="text-2xl font-bold">{{ job.book_name }}</h1>
+    </div>
+
+    <!-- Status Card -->
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <span class="text-sm text-gray-500">Voice</span>
+                <p class="text-sm font-medium">{{ job.voice_name }}</p>
+            </div>
+            <div>
+                <span class="text-sm text-gray-500">Status</span>
+                <p class="text-sm font-medium">
+                    <span class="
+                        {% if job.status == 'completed' %}text-green-600
+                        {% elif job.status == 'processing' %}text-blue-600
+                        {% elif job.status == 'failed' %}text-red-600
+                        {% else %}text-gray-600{% endif %}
+                    ">{{ job.status|upper }}</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mb-2">
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                <span>{{ job.completed_chunks }} / {{ job.total_chunks }} chunks</span>
+                <span>{{ "%.0f"|format(progress) }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div
+                    class="h-2 rounded-full transition-all duration-300
+                    {% if job.status == 'completed' %}bg-green-500
+                    {% elif job.status == 'processing' %}bg-blue-500
+                    {% elif job.status == 'failed' %}bg-red-500
+                    {% else %}bg-gray-400{% endif %}
+                    "
+                    style="width: {{ "%.0f"|format(progress) }}%"
+                ></div>
+            </div>
+        </div>
+
+        {% if job.error_message %}
+        <div class="mt-4 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
+            {{ job.error_message }}
+        </div>
+        {% endif %}
+
+        <p class="text-xs text-gray-400 mt-3">
+            Created: {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            {% if job.completed_at %}
+            &middot; Completed: {{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Audio Files List -->
+    {% if job.status == 'completed' and audio_files %}
+    <div>
+        <h2 class="text-lg font-semibold mb-3">Audio Chunks ({{ audio_files|length }})</h2>
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            {% for audio in audio_files %}
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0">
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-mono text-gray-500 w-8">{{ audio.idx }}</span>
+                    <span class="text-sm text-gray-700">{{ audio.filename }}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-gray-400">{{ "%.1f"|format(audio.size / 1024) }} KB</span>
+                    <a
+                        href="/api/jobs/{{ job.job_id }}/download/{{ audio.filename }}"
+                        class="text-sm text-indigo-600 hover:text-indigo-700"
+                    >Download</a>
+                    <audio
+                        controls
+                        preload="none"
+                        class="h-8"
+                    >
+                        <source src="/api/jobs/{{ job.job_id }}/download/{{ audio.filename }}" type="audio/wav">
+                    </audio>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% elif job.status == 'processing' %}
+    <div
+        hx-get="/jobs/list-all"
+        hx-trigger="load, every 2s"
+        hx-swap="outerHTML"
+    >
+        <p class="text-sm text-blue-600 py-4">Processing... refreshing every 2s</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

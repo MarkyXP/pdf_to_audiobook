@@ -1,0 +1,110 @@
+"""
+TTS engine wrapper for generating audio chunks using pocket_tts.
+
+Built-in voices:
+- alba
+- marius
+- javert
+- jean
+- fantine
+- cosette
+- eponine
+- azelma
+
+References:
+> https://huggingface.co/kyutai/pocket-tts
+"""
+
+import asyncio
+from pathlib import Path
+
+from pocket_tts import TTSModel
+from scipy.io.wavfile import write as write_wav
+
+BUILTIN_VOICES = [
+    "alba",
+    "marius",
+    "javert",
+    "jean",
+    "fantine",
+    "cosette",
+    "eponine",
+    "azelma",
+]
+
+
+def is_builtin_voice(name: str) -> bool:
+    """Check if a voice name is a built-in pocket_tts voice."""
+    return name in BUILTIN_VOICES
+
+
+class TTSEngine:
+    """
+    Wrapper around pocket_tts for generating audio chunks.
+
+    Example:
+        >>> enginge = TTSEngine()
+        >>> voice_state = engine.load_voice(Path("test/voice.wav"))
+        >>> audio_bytes, sample_rate = engine.generate_audio(voice_state, "Hello world")
+        >>> audio_bytes[:4] == b"RIFF"  # Check WAV header
+        True
+    """
+
+    def __init__(self):
+        self._model = TTSModel.load_model()
+
+    def load_voice(self, voice: Path | str = "javert"):
+        """Load a voice from a WAV file."""
+        if isinstance(voice, Path):
+            return self._model.get_state_for_audio_prompt(voice.as_posix())
+        return self._model.get_state_for_audio_prompt(voice or "alba")
+
+    def generate_audio(self, voice_state, text: str) -> bytes:
+        """Generate audio for a text chunk, return raw WAV bytes."""
+        # Replace curly quotes
+        text = text.replace("\u2019", "'").replace("\u2018", "'")
+        audio = self._model.generate_audio(voice_state, text)
+        return audio.numpy(), self._model.sample_rate
+
+    async def async_generate_audio(self, voice_state, text: str) -> bytes:
+        """Async version: generate audio in a thread pool executor."""
+        return await asyncio.to_thread(self.generate_audio, voice_state, text)
+
+    def save_audio_chunk(
+        self,
+        voice_state,
+        text: str,
+        output_path: Path,
+    ) -> None:
+        """Generate and save a single audio chunk to disk."""
+        data, sample_rate = self.generate_audio(voice_state, text)
+        write_wav(str(output_path), sample_rate, data)
+
+    async def async_save_audio_chunk(
+        self,
+        voice_state,
+        text: str,
+        output_path: Path,
+    ) -> None:
+        """Async version: generate and save audio in a thread pool executor."""
+        data, sample_rate = await asyncio.to_thread(self.generate_audio, voice_state, text)
+        write_wav(str(output_path), sample_rate, data)
+
+    @property
+    def model(self):
+        return self._model
+
+
+# Singleton instance
+tts_engine = TTSEngine()
+
+if __name__ == "__main__":
+    engine = TTSEngine()
+    voice_state = engine.load_voice()
+    engine.save_audio_chunk(voice_state, "Hello world", Path("tests/Assets/hello.wav"))
+
+    import doctest
+
+    doctest.testmod(
+        verbose=True, optionflags=doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
+    )
